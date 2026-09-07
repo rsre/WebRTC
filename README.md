@@ -301,7 +301,7 @@ You can also enable push-to-talk. The microphone is captured only while the butt
 the received camera audio is muted while talking to prevent echo:
 
 ```yaml
-type: 'custom:webrtc-camera'
+type: 'custom:webrtc-camera-mike'
 url: doorbell
 media: video,audio,microphone
 ptt: true
