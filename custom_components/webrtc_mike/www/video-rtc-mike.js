@@ -182,11 +182,16 @@ export class VideoRTC extends HTMLElement {
      * https://developer.chrome.com/blog/autoplay/
      */
     play() {
+        // Safari throws NotSupportedError when play() is called without a media source.
+        if (!this.video.srcObject && !this.video.getAttribute('src')) return;
+
         this.video.play().catch(() => {
             if (!this.video.muted) {
                 this.video.muted = true;
                 this.video.play().catch(er => {
-                    console.warn(er);
+                    if (er.name !== 'NotSupportedError' || this.video.srcObject || this.video.getAttribute('src')) {
+                        console.warn(er);
+                    }
                 });
             }
         });
