@@ -44,7 +44,7 @@ class FlowHandler(ConfigFlow, domain=DOMAIN):
                     errors={"base": "connect"},
                 )
 
-            return self.async_create_entry(title="WebRTC Camera", data=user_input)
+            return self.async_create_entry(title="WebRTC Camera Mike", data=user_input)
 
         # check if go2rtc already exists on same server
         tests = await asyncio.gather(
@@ -90,7 +90,7 @@ class FlowHandler(ConfigFlow, domain=DOMAIN):
                 with open(path, "w") as f:
                     yaml.dump(config, f)
 
-            return self.async_create_entry(title="WebRTC Camera", data={})
+            return self.async_create_entry(title="WebRTC Camera Mike", data={})
 
         return self.async_show_form(
             step_id="config",

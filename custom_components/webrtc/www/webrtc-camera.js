@@ -703,7 +703,7 @@ customElements.define('webrtc-camera', WebRTCCamera);
 
 const card = {
     type: 'webrtc-camera',
-    name: 'WebRTC Camera',
+    name: 'WebRTC Camera Mike',
     preview: false,
     description: 'WebRTC camera allows you to view the stream of almost any camera without delay',
 };
