@@ -57,6 +57,12 @@ export class VideoRTC extends HTMLElement {
         this.microphoneSender = null;
 
         /**
+         * [internal] All microphone tracks acquired by this player.
+         * @type {Set<MediaStreamTrack>}
+         */
+        this.microphoneTracks = new Set();
+
+        /**
          * [config] Run stream when not displayed on the screen. Default `false`.
          * @type {boolean}
          */
@@ -328,13 +334,9 @@ export class VideoRTC extends HTMLElement {
 
         this.pcState = WebSocket.CLOSED;
         if (this.pc) {
-            this.pc.getSenders().forEach(sender => {
-                if (sender.track) sender.track.stop();
-            });
-            this.pc.close();
-            this.pc = null;
+            this.closePeerConnection(this.pc);
         }
-        this.microphoneSender = null;
+        this.stopMicrophoneTracks();
 
         this.video.src = '';
         this.video.srcObject = null;
@@ -519,10 +521,9 @@ export class VideoRTC extends HTMLElement {
                 video2.addEventListener('loadeddata', () => this.onpcvideo(video2), {once: true});
                 video2.srcObject = new MediaStream(tracks);
             } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-                pc.close(); // stop next events
+                this.closePeerConnection(pc); // stop next events
 
                 this.pcState = WebSocket.CLOSED;
-                this.pc = null;
 
                 this.onconnect();
             }
@@ -544,16 +545,59 @@ export class VideoRTC extends HTMLElement {
                     break;
                 case 'error':
                     if (!msg.value.includes('webrtc/offer')) return;
-                    pc.close();
+                    this.closePeerConnection(pc);
             }
         };
 
         this.createOffer(pc).then(offer => {
             this.send({type: 'webrtc/offer', value: offer.sdp});
-        });
+        }).catch(er => console.warn(er));
 
         this.pcState = WebSocket.CONNECTING;
         this.pc = pc;
+    }
+
+    /**
+     * Stop a microphone track and remove it from the active-track registry.
+     * @param track {MediaStreamTrack|null}
+     */
+    stopMicrophoneTrack(track) {
+        if (!track) return;
+        track.stop();
+        this.microphoneTracks.delete(track);
+    }
+
+    /** Stop every microphone track acquired by this player. */
+    stopMicrophoneTracks() {
+        this.microphoneTracks.forEach(track => track.stop());
+        this.microphoneTracks.clear();
+    }
+
+    /**
+     * Close a peer connection without leaving any sender tracks capturing.
+     * @param pc {RTCPeerConnection}
+     */
+    closePeerConnection(pc) {
+        pc.getSenders().forEach(sender => this.stopMicrophoneTrack(sender.track));
+        pc.close();
+        if (this.pc === pc) {
+            this.pc = null;
+            this.microphoneSender = null;
+        }
+    }
+
+    /**
+     * Acquire and register one microphone track.
+     * @return {Promise<MediaStreamTrack>}
+     */
+    async getMicrophoneTrack() {
+        const media = await navigator.mediaDevices.getUserMedia({audio: true});
+        const tracks = media.getAudioTracks();
+        const track = tracks.shift();
+        tracks.forEach(extraTrack => extraTrack.stop());
+        if (!track) throw new Error('Microphone track is unavailable');
+        this.microphoneTracks.add(track);
+        return track;
     }
 
     /**
@@ -564,31 +608,25 @@ export class VideoRTC extends HTMLElement {
     async setMicrophoneMuted(muted) {
         this.microphoneMuted = muted;
         const sender = this.microphoneSender;
-        if (!sender) return;
 
         if (muted) {
-            const track = sender.track;
-            try {
-                await sender.replaceTrack(null);
-            } finally {
-                if (track) track.stop();
-            }
+            this.stopMicrophoneTracks();
+            if (sender) await sender.replaceTrack(null);
             return;
         }
+        if (!sender) return;
 
         let track;
         try {
-            const media = await navigator.mediaDevices.getUserMedia({audio: true});
-            track = media.getAudioTracks()[0];
-            if (!track) throw new Error('Microphone track is unavailable');
+            track = await this.getMicrophoneTrack();
 
             if (this.microphoneMuted || sender !== this.microphoneSender) {
-                track.stop();
+                this.stopMicrophoneTrack(track);
                 return;
             }
             await sender.replaceTrack(track);
         } catch (e) {
-            if (track) track.stop();
+            this.stopMicrophoneTrack(track);
             this.microphoneMuted = true;
             throw e;
         }
@@ -603,18 +641,22 @@ export class VideoRTC extends HTMLElement {
             let track = null;
             try {
                 if (!this.microphoneMuted) {
-                    const media = await navigator.mediaDevices.getUserMedia({audio: true});
-                    track = media.getAudioTracks()[0];
+                    track = await this.getMicrophoneTrack();
                     if (this.microphoneMuted && track) {
-                        track.stop();
+                        this.stopMicrophoneTrack(track);
                         track = null;
                     }
                 }
             } catch (e) {
                 console.warn(e);
             }
-            const transceiver = pc.addTransceiver(track || 'audio', {direction: 'sendonly'});
-            this.microphoneSender = transceiver.sender;
+            try {
+                const transceiver = pc.addTransceiver(track || 'audio', {direction: 'sendonly'});
+                this.microphoneSender = transceiver.sender;
+            } catch (e) {
+                this.stopMicrophoneTrack(track);
+                throw e;
+            }
         }
 
         for (const kind of ['video', 'audio']) {
@@ -663,8 +705,7 @@ export class VideoRTC extends HTMLElement {
             } else {
                 this.pcState = WebSocket.CLOSED;
                 if (this.pc) {
-                    this.pc.close();
-                    this.pc = null;
+                    this.closePeerConnection(this.pc);
                 }
             }
         }
