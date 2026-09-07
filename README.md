@@ -296,6 +296,19 @@ streams:
     media: video,audio,microphone
 ```
 
+You can also enable push-to-talk. The microphone is captured only while the button is held, and
+the received camera audio is muted while talking to prevent echo:
+
+```yaml
+type: 'custom:webrtc-camera'
+url: doorbell
+media: video,audio,microphone
+ptt: true
+```
+
+The first press may ask for microphone permission and show `Microphone ready — hold again to talk`
+while the card reconnects. Microphone access requires HTTPS.
+
 **PS.** For Hass [Mobile App](https://www.home-assistant.io/integrations/mobile_app/) ensure that you can use microphone with the built-in [Assist](https://www.home-assistant.io/voice_control/).
 
 ## Snapshots to Telegram

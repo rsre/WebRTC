@@ -36,6 +36,7 @@ class WebRTCCamera extends VideoRTC {
          *     muted: boolean,
          *     intersection: number,
          *     ui: boolean,
+         *     ptt: boolean,
          *     style: string,
          *     background: boolean,
          *
@@ -62,7 +63,8 @@ class WebRTCCamera extends VideoRTC {
          * }} config
          */
         this.config = Object.assign({
-            mode: config.mse === false ? 'webrtc' : config.webrtc === false ? 'mse' : this.mode,
+            mode: config.ptt && !config.mode ? 'webrtc' :
+                config.mse === false ? 'webrtc' : config.webrtc === false ? 'mse' : this.mode,
             media: this.media,
             streams: [{url: config.url, entity: config.entity}],
             poster_remote: config.poster && (config.poster.indexOf('://') > 0 || config.poster.charAt(0) === '/'),
@@ -89,7 +91,7 @@ class WebRTCCamera extends VideoRTC {
      * Called by the Hass to calculate default card height.
      */
     getCardSize() {
-        return 5; // x 50px
+        return this.config.ptt ? 6 : 5; // x 50px
     }
 
     /**
@@ -132,6 +134,7 @@ class WebRTCCamera extends VideoRTC {
     oninit() {
         super.oninit();
         this.renderMain();
+        this.renderPTT();
         this.renderDigitalPTZ();
         this.renderPTZ();
         this.renderCustomUI();
@@ -208,6 +211,49 @@ class WebRTCCamera extends VideoRTC {
         }
     }
 
+    /**
+     * Avoid requesting microphone access during negotiation when push-to-talk is enabled.
+     * A track captured by the first button press is used once to negotiate an audio sender.
+     * @param pc {RTCPeerConnection}
+     * @return {Promise<RTCSessionDescriptionInit>}
+     */
+    async createOffer(pc) {
+        if (!this.config || !this.config.ptt || !this.media.includes('microphone')) {
+            return super.createOffer(pc);
+        }
+
+        const media = this.media;
+        const track = this.pttPendingTrack;
+        this.pttPendingTrack = null;
+        this.pttSender = null;
+
+        try {
+            if (track) {
+                this.pttSender = pc.addTransceiver(track, {direction: 'sendonly'}).sender;
+            }
+            this.media = media.split(',').filter(kind => kind !== 'microphone').join(',');
+            return await super.createOffer(pc);
+        } finally {
+            this.media = media;
+            if (track) {
+                try {
+                    if (this.pttSender) await this.pttSender.replaceTrack(null);
+                } finally {
+                    track.stop();
+                }
+            }
+        }
+    }
+
+    ondisconnect() {
+        if (this.pttTrack) this.pttTrack.stop();
+        if (this.pttPendingTrack) this.pttPendingTrack.stop();
+        this.pttTrack = null;
+        this.pttPendingTrack = null;
+        this.pttSender = null;
+        super.ondisconnect();
+    }
+
     renderMain() {
         const shadow = this.attachShadow({mode: 'open'});
         shadow.innerHTML = `
@@ -269,6 +315,135 @@ class WebRTCCamera extends VideoRTC {
 
         if (this.config.muted) this.video.muted = true;
         if (this.config.poster_remote) this.video.poster = this.config.poster;
+    }
+
+    renderPTT() {
+        if (!this.config.ptt || !this.media.includes('microphone')) return;
+
+        const card = this.querySelector('.card');
+        card.insertAdjacentHTML('beforebegin', `
+            <style>
+                .ptt {
+                    padding: 8px;
+                    background: var(--ha-card-background, var(--card-background-color, white));
+                    text-align: center;
+                }
+                .ptt-button {
+                    width: 100%;
+                    min-height: 44px;
+                    border: 0;
+                    border-radius: 4px;
+                    color: var(--primary-text-color);
+                    background: var(--secondary-background-color);
+                    font: inherit;
+                    touch-action: none;
+                    cursor: pointer;
+                    user-select: none;
+                    -webkit-user-select: none;
+                }
+                .ptt-button.active {
+                    color: white;
+                    background: var(--error-color, #db4437);
+                }
+                .ptt-message {
+                    min-height: 18px;
+                    margin-top: 4px;
+                    color: var(--secondary-text-color);
+                    font-size: 12px;
+                }
+                .ptt-message.error {
+                    color: var(--error-color, #db4437);
+                }
+            </style>
+        `);
+        card.insertAdjacentHTML('afterend', `
+            <div class="ptt">
+                <button class="ptt-button" type="button">Hold to talk</button>
+                <div class="ptt-message"></div>
+            </div>
+        `);
+
+        const button = this.querySelector('.ptt-button');
+        const message = this.querySelector('.ptt-message');
+
+        const resetPlayback = () => {
+            if (this.pttVideoMuted !== undefined) {
+                this.video.muted = this.pttVideoMuted;
+                this.pttVideoMuted = undefined;
+            }
+            button.classList.remove('active');
+            button.innerText = 'Hold to talk';
+        };
+
+        const stop = () => {
+            this.pttPressed = false;
+            const track = this.pttTrack;
+            this.pttTrack = null;
+            if (track) {
+                track.stop();
+                if (this.pttSender) this.pttSender.replaceTrack(null).catch(console.warn);
+            }
+            resetPlayback();
+        };
+
+        const errorText = error => {
+            if (!window.isSecureContext) return 'Microphone requires HTTPS';
+            if (error.name === 'NotAllowedError') return 'Microphone permission denied';
+            if (error.name === 'NotFoundError') return 'No microphone found';
+            return error.message || 'Unable to access microphone';
+        };
+
+        const start = async ev => {
+            ev.preventDefault();
+            if (this.pttPressed) return;
+
+            this.pttPressed = true;
+            this.pttVideoMuted = this.video.muted;
+            this.video.muted = true;
+            button.classList.add('active');
+            button.innerText = 'Talking...';
+            message.innerText = '';
+            message.classList.remove('error');
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+                const track = stream.getAudioTracks()[0];
+                stream.getTracks().filter(value => value !== track).forEach(value => value.stop());
+                if (!track) throw new Error('No microphone track available');
+
+                if (!this.pttSender) {
+                    this.pttPressed = false;
+                    this.pttPendingTrack = track;
+                    message.innerText = 'Microphone ready — hold again to talk';
+                    resetPlayback();
+                    super.ondisconnect();
+                    setTimeout(() => this.onconnect(), 100);
+                    return;
+                }
+
+                if (!this.pttPressed) {
+                    track.stop();
+                    resetPlayback();
+                    return;
+                }
+
+                this.pttTrack = track;
+                await this.pttSender.replaceTrack(track);
+            } catch (error) {
+                this.pttPressed = false;
+                if (this.pttTrack) this.pttTrack.stop();
+                this.pttTrack = null;
+                message.innerText = errorText(error);
+                message.classList.add('error');
+                resetPlayback();
+            }
+        };
+
+        button.addEventListener('mousedown', start);
+        button.addEventListener('touchstart', start, {passive: false});
+        for (const event of ['mouseup', 'touchend', 'touchcancel', 'blur']) {
+            window.addEventListener(event, stop);
+        }
     }
 
     renderDigitalPTZ() {
@@ -693,4 +868,3 @@ const card = {
 // Apple iOS 12 doesn't support `||=`
 if (window.customCards) window.customCards.push(card);
 else window.customCards = [card];
-
