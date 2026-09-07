@@ -552,7 +552,7 @@ class WebRTCCamera extends VideoRTC {
         }
 
         const ui = this.querySelector('.ui');
-        ui.addEventListener('click', ev => {
+        ui.addEventListener('click', async ev => {
             const icon = ev.target.icon;
             if (icon === 'mdi:play') {
                 this.play();
@@ -561,13 +561,14 @@ class WebRTCCamera extends VideoRTC {
             } else if (icon === 'mdi:volume-high') {
                 video.muted = true;
             } else if (icon === 'mdi:microphone' || icon === 'mdi:microphone-off') {
-                this.microphoneMuted = !this.microphoneMuted;
-                if (this.pc) {
-                    this.pc.getSenders()
-                        .filter(sender => sender.track && sender.track.kind === 'audio')
-                        .forEach(sender => sender.track.enabled = !this.microphoneMuted);
+                const microphone = ev.target;
+                microphone.icon = this.microphoneMuted ? 'mdi:microphone' : 'mdi:microphone-off';
+                try {
+                    await this.setMicrophoneMuted(!this.microphoneMuted);
+                } catch (e) {
+                    console.warn(e);
                 }
-                ev.target.icon = this.microphoneMuted ? 'mdi:microphone-off' : 'mdi:microphone';
+                microphone.icon = this.microphoneMuted ? 'mdi:microphone-off' : 'mdi:microphone';
             } else if (icon === 'mdi:fullscreen') {
                 this.requestFullscreen().catch(console.warn);
             } else if (icon === 'mdi:fullscreen-exit') {

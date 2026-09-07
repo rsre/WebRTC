@@ -51,6 +51,12 @@ export class VideoRTC extends HTMLElement {
         this.microphoneMuted = false;
 
         /**
+         * [internal] Sender used for the outgoing microphone track.
+         * @type {RTCRtpSender|null}
+         */
+        this.microphoneSender = null;
+
+        /**
          * [config] Run stream when not displayed on the screen. Default `false`.
          * @type {boolean}
          */
@@ -328,6 +334,7 @@ export class VideoRTC extends HTMLElement {
             this.pc.close();
             this.pc = null;
         }
+        this.microphoneSender = null;
 
         this.video.src = '';
         this.video.srcObject = null;
@@ -550,20 +557,64 @@ export class VideoRTC extends HTMLElement {
     }
 
     /**
+     * Stop and release the microphone when muted, or acquire a new track when unmuted.
+     * @param muted {boolean}
+     * @return {Promise<void>}
+     */
+    async setMicrophoneMuted(muted) {
+        this.microphoneMuted = muted;
+        const sender = this.microphoneSender;
+        if (!sender) return;
+
+        if (muted) {
+            const track = sender.track;
+            try {
+                await sender.replaceTrack(null);
+            } finally {
+                if (track) track.stop();
+            }
+            return;
+        }
+
+        let track;
+        try {
+            const media = await navigator.mediaDevices.getUserMedia({audio: true});
+            track = media.getAudioTracks()[0];
+            if (!track) throw new Error('Microphone track is unavailable');
+
+            if (this.microphoneMuted || sender !== this.microphoneSender) {
+                track.stop();
+                return;
+            }
+            await sender.replaceTrack(track);
+        } catch (e) {
+            if (track) track.stop();
+            this.microphoneMuted = true;
+            throw e;
+        }
+    }
+
+    /**
      * @param pc {RTCPeerConnection}
      * @return {Promise<RTCSessionDescriptionInit>}
      */
     async createOffer(pc) {
-        try {
-            if (this.media.includes('microphone')) {
-                const media = await navigator.mediaDevices.getUserMedia({audio: true});
-                media.getTracks().forEach(track => {
-                    track.enabled = !this.microphoneMuted;
-                    pc.addTransceiver(track, {direction: 'sendonly'});
-                });
+        if (this.media.includes('microphone')) {
+            let track = null;
+            try {
+                if (!this.microphoneMuted) {
+                    const media = await navigator.mediaDevices.getUserMedia({audio: true});
+                    track = media.getAudioTracks()[0];
+                    if (this.microphoneMuted && track) {
+                        track.stop();
+                        track = null;
+                    }
+                }
+            } catch (e) {
+                console.warn(e);
             }
-        } catch (e) {
-            console.warn(e);
+            const transceiver = pc.addTransceiver(track || 'audio', {direction: 'sendonly'});
+            this.microphoneSender = transceiver.sender;
         }
 
         for (const kind of ['video', 'audio']) {
