@@ -64,9 +64,9 @@ You can change the go2rtc settings by adding the `go2rtc.yaml` file to your Hass
   <summary>Additional steps if you are using the UI in YAML mode: add card to resources</summary>
 
   The `custom_card` will be automatically registered with the Home Assistant UI, except when you are managing the UI in YAML mode.
-  If you are managing the UI in YAML mode then add this to your UI resources for the `custom:webrtc-camera` card to work:
+  If you are managing the UI in YAML mode then add this to your UI resources for the `custom:webrtc-camera-mike` card to work:
   ```yaml
-  url: /webrtc/webrtc-camera.js
+  url: /webrtc_mike/webrtc-camera-mike.js
   type: module
   ```
   - Refresh your browser 
@@ -99,28 +99,28 @@ As a `poster` you can use:
 **Minimal**
 
 ```yaml
-type: 'custom:webrtc-camera'
+type: 'custom:webrtc-camera-mike'
 url: 'rtsp://rtsp:12345678@192.168.1.123:554/av_stream/ch0'
 ```
 
 **or**
 
 ```yaml
-type: 'custom:webrtc-camera'
+type: 'custom:webrtc-camera-mike'
 url: 'camera1'  # stream name from go2rtc.yaml
 ```
 
 **or**
 
 ```yaml
-type: 'custom:webrtc-camera'
+type: 'custom:webrtc-camera-mike'
 entity: camera.generic_stream  # change to your camera entity_id
 ```
 
 **or**
 
 ```yaml
-type: 'custom:webrtc-camera'
+type: 'custom:webrtc-camera-mike'
 streams:
   - url: go2rtc_stream_hd
     name: HD      # name is optional
@@ -139,7 +139,7 @@ streams:
 **All settings are optional!** Only required setting - `url` or `entity` or `streams`.
 
 ```yaml
-type: 'custom:webrtc-camera'
+type: 'custom:webrtc-camera-mike'
 
 url: 'rtsp://rtsp:12345678@192.168.1.123:554/av_stream/ch0'
 entity: camera.generic_stream
@@ -182,7 +182,7 @@ Pan, tilt, zoom controls: [PTZ config examples](https://github.com/AlexxIT/WebRT
 **Paused by default**
 
 ```yaml
-type: custom:webrtc-camera
+type: custom:webrtc-camera-mike
 poster: dahua1-snap  # stream name from go2rtc.yaml (http-snapshot)
 streams:
   - url: ''          # empty url, so only poster will be shown
@@ -289,7 +289,7 @@ ptz:
 You should add `microphone` to `media` param. You can use two streams: one with mic, second without:
 
 ```yaml
-type: 'custom:webrtc-camera'
+type: 'custom:webrtc-camera-mike'
 streams:
   - url: go2rtc_stream
   - url: go2rtc_stream

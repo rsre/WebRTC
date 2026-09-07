@@ -51,22 +51,22 @@ LINKS = {}  # 2 3 4
 
 # DDoS protection against requests to HLS proxy
 # streams are additionally protected by a random playlist identifier
-HLS_COOKIE = "webrtc-hls-session"
+HLS_COOKIE = "webrtc-mike-hls-session"
 HLS_SESSION = str(uuid.uuid4())
 
 
 async def async_setup(hass: HomeAssistant, config: dict):
     # 1. Serve lovelace card
     path = Path(__file__).parent / "www"
-    for name in ("video-rtc.js", "webrtc-camera.js", "digital-ptz.js"):
-        await utils.register_static_path(hass, "/webrtc/" + name, str(path / name))
+    for name in ("video-rtc.js", "webrtc-camera-mike.js", "digital-ptz.js"):
+        await utils.register_static_path(hass, "/webrtc_mike/" + name, str(path / name))
 
     # 2. Add card to resources
     version = getattr(hass.data["integrations"][DOMAIN], "version", 0)
-    await utils.init_resource(hass, "/webrtc/webrtc-camera.js", str(version))
+    await utils.init_resource(hass, "/webrtc_mike/webrtc-camera-mike.js", str(version))
 
     # 3. Serve html page
-    await utils.register_static_path(hass, "/webrtc/embed", str(path / "embed.html"))
+    await utils.register_static_path(hass, "/webrtc_mike/embed", str(path / "embed.html"))
 
     # 4. Serve WebSocket API
     hass.http.register_view(WebSocketView)
@@ -74,7 +74,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
     # 5. Serve HLS proxy
     hass.http.register_view(HLSView)
 
-    # 6. Register webrtc.create_link and webrtc.dash_cast services:
+    # 6. Register webrtc_mike.create_link and webrtc_mike.dash_cast services:
 
     async def create_link(call: ServiceCall):
         link_id = call.data["link_id"]
@@ -98,7 +98,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
         hass_url = call.data.get("hass_url") or get_url(hass)
         query = call.data.get("extra", {})
         query["url"] = link_id
-        cast_url = hass_url + "/webrtc/embed?" + urlencode(query)
+        cast_url = hass_url + "/webrtc_mike/embed?" + urlencode(query)
 
         _LOGGER.debug(f"dash_cast: {cast_url}")
 
@@ -220,8 +220,8 @@ async def ws_poster(hass: HomeAssistant, params: dict) -> web.Response:
 
 
 class WebSocketView(HomeAssistantView):
-    url = "/api/webrtc/ws"
-    name = "api:webrtc:ws"
+    url = "/api/webrtc_mike/ws"
+    name = "api:webrtc_mike:ws"
     requires_auth = False
 
     async def get(self, request: web.Request):
@@ -293,8 +293,8 @@ class WebSocketView(HomeAssistantView):
 
 
 class HLSView(HomeAssistantView):
-    url = "/api/webrtc/hls/{filename}"
-    name = "api:webrtc:hls"
+    url = "/api/webrtc_mike/hls/{filename}"
+    name = "api:webrtc_mike:hls"
     requires_auth = False
 
     async def get(self, request: web.Request, filename: str):

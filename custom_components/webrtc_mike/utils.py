@@ -24,7 +24,7 @@ from homeassistant.helpers.entity_component import DATA_INSTANCES
 
 _LOGGER = logging.getLogger(__name__)
 
-DOMAIN = "webrtc"
+DOMAIN = "webrtc_mike"
 
 BINARY_VERSION = "1.9.12"
 

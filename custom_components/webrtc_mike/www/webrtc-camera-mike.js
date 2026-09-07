@@ -154,7 +154,7 @@ class WebRTCCamera extends VideoRTC {
         this.setStatus('Loading..');
 
         this.hass.callWS({
-            type: 'auth/sign_path', path: '/api/webrtc/ws'
+            type: 'auth/sign_path', path: '/api/webrtc_mike/ws'
         }).then(data => {
             if (this.config.poster && !this.config.poster_remote) {
                 this.video.poster = this.hass.hassUrl(data.path) + '&poster=' + encodeURIComponent(this.config.poster);
@@ -699,10 +699,10 @@ class WebRTCCamera extends VideoRTC {
     }
 }
 
-customElements.define('webrtc-camera', WebRTCCamera);
+customElements.define('webrtc-camera-mike', WebRTCCamera);
 
 const card = {
-    type: 'webrtc-camera',
+    type: 'webrtc-camera-mike',
     name: 'WebRTC Camera Mike',
     preview: false,
     description: 'WebRTC camera allows you to view the stream of almost any camera without delay',

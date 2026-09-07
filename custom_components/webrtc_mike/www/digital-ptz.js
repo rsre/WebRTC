@@ -207,7 +207,7 @@ function startMouseDragPan(params) {
   return startGesturePan(params, "mouse");
 }
 /** Transform */
-const PERSIST_KEY_PREFIX = "webrtc-digital-ptc:";
+const PERSIST_KEY_PREFIX = "webrtc-mike-digital-ptc:";
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 function getTransformedDimensions(video) {
   const { videoWidth, videoHeight } = video;
