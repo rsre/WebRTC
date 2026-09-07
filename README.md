@@ -307,8 +307,8 @@ media: video,audio,microphone
 ptt: true
 ```
 
-The first press may ask for microphone permission and show `Microphone ready — hold again to talk`
-while the card reconnects. Microphone access requires HTTPS.
+The outgoing audio channel is negotiated when the stream starts, without capturing the microphone.
+The first press may ask for microphone permission. Microphone access requires HTTPS.
 
 **PS.** For Hass [Mobile App](https://www.home-assistant.io/integrations/mobile_app/) ensure that you can use microphone with the built-in [Assist](https://www.home-assistant.io/voice_control/).
 

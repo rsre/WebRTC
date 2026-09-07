@@ -213,7 +213,7 @@ class WebRTCCamera extends VideoRTC {
 
     /**
      * Avoid requesting microphone access during negotiation when push-to-talk is enabled.
-     * A track captured by the first button press is used once to negotiate an audio sender.
+     * Negotiate a send-only audio channel without attaching a microphone track.
      * @param pc {RTCPeerConnection}
      * @return {Promise<RTCSessionDescriptionInit>}
      */
@@ -223,33 +223,19 @@ class WebRTCCamera extends VideoRTC {
         }
 
         const media = this.media;
-        const track = this.pttPendingTrack;
-        this.pttPendingTrack = null;
-        this.pttSender = null;
+        this.pttSender = pc.addTransceiver('audio', {direction: 'sendonly'}).sender;
 
         try {
-            if (track) {
-                this.pttSender = pc.addTransceiver(track, {direction: 'sendonly'}).sender;
-            }
             this.media = media.split(',').filter(kind => kind !== 'microphone').join(',');
             return await super.createOffer(pc);
         } finally {
             this.media = media;
-            if (track) {
-                try {
-                    if (this.pttSender) await this.pttSender.replaceTrack(null);
-                } finally {
-                    track.stop();
-                }
-            }
         }
     }
 
     ondisconnect() {
         if (this.pttTrack) this.pttTrack.stop();
-        if (this.pttPendingTrack) this.pttPendingTrack.stop();
         this.pttTrack = null;
-        this.pttPendingTrack = null;
         this.pttSender = null;
         super.ondisconnect();
     }
@@ -413,11 +399,10 @@ class WebRTCCamera extends VideoRTC {
 
                 if (!this.pttSender) {
                     this.pttPressed = false;
-                    this.pttPendingTrack = track;
-                    message.innerText = 'Microphone ready — hold again to talk';
+                    track.stop();
+                    message.innerText = 'Talk channel is not ready';
+                    message.classList.add('error');
                     resetPlayback();
-                    super.ondisconnect();
-                    setTimeout(() => this.onconnect(), 100);
                     return;
                 }
 
