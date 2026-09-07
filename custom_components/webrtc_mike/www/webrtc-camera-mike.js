@@ -212,8 +212,46 @@ class WebRTCCamera extends VideoRTC {
     }
 
     /**
+     * Create a silent audio track so WebKit negotiates the talk channel without microphone access.
+     * @return {MediaStreamTrack}
+     */
+    createPTTSilentTrack() {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) throw new Error('Web Audio is not supported');
+
+        this.pttAudioContext = new AudioContext();
+        this.pttSilentDestination = this.pttAudioContext.createMediaStreamDestination();
+        this.pttSilentGain = this.pttAudioContext.createGain();
+        this.pttSilentSource = this.pttAudioContext.createOscillator();
+        this.pttSilentGain.gain.value = 0;
+        this.pttSilentSource.connect(this.pttSilentGain);
+        this.pttSilentGain.connect(this.pttSilentDestination);
+        this.pttSilentSource.start();
+        this.pttSilentTrack = this.pttSilentDestination.stream.getAudioTracks()[0];
+        return this.pttSilentTrack;
+    }
+
+    /** Release resources used by the silent PTT placeholder track. */
+    closePTTSilentTrack() {
+        if (this.pttSilentTrack) this.pttSilentTrack.stop();
+        if (this.pttSilentSource) {
+            try {
+                this.pttSilentSource.stop();
+            } catch (e) {
+                // already stopped
+            }
+        }
+        if (this.pttAudioContext) this.pttAudioContext.close().catch(console.warn);
+        this.pttSilentTrack = null;
+        this.pttSilentSource = null;
+        this.pttSilentGain = null;
+        this.pttSilentDestination = null;
+        this.pttAudioContext = null;
+    }
+
+    /**
      * Avoid requesting microphone access during negotiation when push-to-talk is enabled.
-     * Negotiate a send-only audio channel without attaching a microphone track.
+     * Negotiate a send-only audio channel using a non-capturing silent track.
      * @param pc {RTCPeerConnection}
      * @return {Promise<RTCSessionDescriptionInit>}
      */
@@ -223,7 +261,8 @@ class WebRTCCamera extends VideoRTC {
         }
 
         const media = this.media;
-        this.pttSender = pc.addTransceiver('audio', {direction: 'sendonly'}).sender;
+        const silentTrack = this.createPTTSilentTrack();
+        this.pttSender = pc.addTransceiver(silentTrack, {direction: 'sendonly'}).sender;
 
         try {
             this.media = media.split(',').filter(kind => kind !== 'microphone').join(',');
@@ -237,6 +276,7 @@ class WebRTCCamera extends VideoRTC {
         if (this.pttTrack) this.pttTrack.stop();
         this.pttTrack = null;
         this.pttSender = null;
+        this.closePTTSilentTrack();
         super.ondisconnect();
     }
 
@@ -366,8 +406,12 @@ class WebRTCCamera extends VideoRTC {
             const track = this.pttTrack;
             this.pttTrack = null;
             if (track) {
-                track.stop();
-                if (this.pttSender) this.pttSender.replaceTrack(null).catch(console.warn);
+                const replace = this.pttSender && this.pttSilentTrack ?
+                    this.pttSender.replaceTrack(this.pttSilentTrack) : Promise.resolve();
+                replace.then(() => track.stop(), error => {
+                    console.warn(error);
+                    track.stop();
+                });
             }
             resetPlayback();
         };
@@ -392,6 +436,9 @@ class WebRTCCamera extends VideoRTC {
             message.classList.remove('error');
 
             try {
+                if (this.pttAudioContext && this.pttAudioContext.state === 'suspended') {
+                    this.pttAudioContext.resume().catch(console.warn);
+                }
                 const stream = await navigator.mediaDevices.getUserMedia({audio: true});
                 const track = stream.getAudioTracks()[0];
                 stream.getTracks().filter(value => value !== track).forEach(value => value.stop());
