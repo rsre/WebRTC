@@ -118,6 +118,11 @@ class WebRTCCamera extends VideoRTC {
         this.mode = stream.mode || this.config.mode;
         this.media = stream.media || this.config.media;
 
+        const microphone = this.shadowRoot && this.shadowRoot.querySelector('.microphone');
+        if (microphone) {
+            microphone.style.display = this.media.includes('microphone') ? 'block' : 'none';
+        }
+
         if (reload) {
             this.ondisconnect();
             setTimeout(() => this.onconnect(), 100); // wait ws.close event
@@ -479,6 +484,9 @@ class WebRTCCamera extends VideoRTC {
                 .volume {
                     display: none;
                 }
+                .microphone {
+                    display: ${this.media.includes('microphone') ? 'block' : 'none'};
+                }
                 .stream {
                     padding-top: 2px;
                     margin-left: 2px;
@@ -500,6 +508,7 @@ class WebRTCCamera extends VideoRTC {
                     <span class="stream">${this.streamName}</span>
                     <span class="space"></span>
                     <ha-icon class="play" icon="mdi:play"></ha-icon>
+                    <ha-icon class="microphone" icon="mdi:microphone"></ha-icon>
                     <ha-icon class="volume" icon="mdi:volume-high"></ha-icon>
                 </div>
             </div>
@@ -551,6 +560,14 @@ class WebRTCCamera extends VideoRTC {
                 video.muted = false;
             } else if (icon === 'mdi:volume-high') {
                 video.muted = true;
+            } else if (icon === 'mdi:microphone' || icon === 'mdi:microphone-off') {
+                this.microphoneMuted = !this.microphoneMuted;
+                if (this.pc) {
+                    this.pc.getSenders()
+                        .filter(sender => sender.track && sender.track.kind === 'audio')
+                        .forEach(sender => sender.track.enabled = !this.microphoneMuted);
+                }
+                ev.target.icon = this.microphoneMuted ? 'mdi:microphone-off' : 'mdi:microphone';
             } else if (icon === 'mdi:fullscreen') {
                 this.requestFullscreen().catch(console.warn);
             } else if (icon === 'mdi:fullscreen-exit') {
@@ -693,4 +710,3 @@ const card = {
 // Apple iOS 12 doesn't support `||=`
 if (window.customCards) window.customCards.push(card);
 else window.customCards = [card];
-
