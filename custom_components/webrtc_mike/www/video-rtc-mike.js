@@ -266,8 +266,12 @@ export class VideoRTC extends HTMLElement {
 
         this.appendChild(this.video);
 
-        this.video.addEventListener('error', ev => {
-            console.warn(ev);
+        this.video.addEventListener('error', () => {
+            const error = this.video.error;
+            // Safari may emit an error while a source is being cleared or playback is aborted.
+            if (!error || error.code === 1 || (!this.video.currentSrc && !this.video.srcObject)) return;
+
+            console.warn(`VideoRTC media error ${error.code}: ${error.message || 'unknown error'}`);
             if (this.ws) this.ws.close(); // run reconnect for broken MSE stream
         });
 
@@ -338,7 +342,7 @@ export class VideoRTC extends HTMLElement {
         }
         this.stopMicrophoneTracks();
 
-        this.video.src = '';
+        this.video.removeAttribute('src');
         this.video.srcObject = null;
     }
 
