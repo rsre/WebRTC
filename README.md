@@ -149,7 +149,6 @@ media: video,audio  # select only video or audio track, default both
 server: http://192.168.1.123:1984/     # custom go2rtc server address, default empty
 
 ui: true  # custom video controls, default false
-# when `media` includes `microphone`, the UI also shows a microphone mute button
 
 digital_ptz:  # digital zoom and pan via mouse/touch, defaults:
   mouse_drag_pan: true 

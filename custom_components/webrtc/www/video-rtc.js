@@ -45,12 +45,6 @@ export class VideoRTC extends HTMLElement {
         this.media = 'video,audio';
 
         /**
-         * [config] Current state of outgoing microphone tracks.
-         * @type {boolean}
-         */
-        this.microphoneMuted = false;
-
-        /**
          * [config] Run stream when not displayed on the screen. Default `false`.
          * @type {boolean}
          */
@@ -558,7 +552,6 @@ export class VideoRTC extends HTMLElement {
             if (this.media.includes('microphone')) {
                 const media = await navigator.mediaDevices.getUserMedia({audio: true});
                 media.getTracks().forEach(track => {
-                    track.enabled = !this.microphoneMuted;
                     pc.addTransceiver(track, {direction: 'sendonly'});
                 });
             }
