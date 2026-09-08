@@ -310,6 +310,7 @@ debug: true  # optional timestamped lifecycle messages in the browser console
 
 The outgoing audio channel is negotiated with a silent placeholder when the stream starts, without capturing the microphone.
 The first press may ask for microphone permission. Microphone access requires HTTPS.
+PTT cards keep their stream connected by default; set `intersection` explicitly to restore viewport-based shutdown.
 Remove `debug: true` after troubleshooting.
 
 **PS.** For Hass [Mobile App](https://www.home-assistant.io/integrations/mobile_app/) ensure that you can use microphone with the built-in [Assist](https://www.home-assistant.io/voice_control/).

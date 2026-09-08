@@ -12,8 +12,12 @@ class WebRTCCamera extends VideoRTC {
 
         if (config.background) this.background = config.background;
 
-        if (config.intersection === 0) this.visibilityThreshold = 0;
-        else this.visibilityThreshold = config.intersection || 0.75;
+        // Home Assistant Sections may briefly report a PTT card outside the viewport
+        // while its media element settles, which triggers the delayed teardown loop.
+        // Keep explicitly configured intersection handling, but disable it by default
+        // for PTT cards so an established two-way stream remains connected.
+        if (config.intersection !== undefined) this.visibilityThreshold = config.intersection;
+        else this.visibilityThreshold = config.ptt ? 0 : 0.75;
 
         /**
          * @type {{
