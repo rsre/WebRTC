@@ -324,19 +324,24 @@ class WebRTCCamera extends VideoRTC {
                 signalingState: pc.signalingState,
             }));
         }
-        const media = this.media;
+        // Keep the camera's receive transceivers first. The signaling layer assigns
+        // incoming ICE candidates to mid 0, and go2rtc expects the primary media
+        // section there. Putting the PTT sender first makes audio mid 0 and can
+        // delay or repeatedly tear down the incoming video stream.
+        for (const kind of ['video', 'audio']) {
+            if (this.media.includes(kind)) {
+                pc.addTransceiver(kind, {direction: 'recvonly'});
+            }
+        }
+
         const silentTrack = this.createPTTSilentTrack();
         this.pttSender = pc.addTransceiver(silentTrack, {direction: 'sendonly'}).sender;
         this.debugLog('added silent send-only transceiver');
 
-        try {
-            this.media = media.split(',').filter(kind => kind !== 'microphone').join(',');
-            const offer = await super.createOffer(pc);
-            this.debugLog('local WebRTC offer created');
-            return offer;
-        } finally {
-            this.media = media;
-        }
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        this.debugLog('local WebRTC offer created');
+        return offer;
     }
 
     ondisconnect() {
@@ -942,6 +947,8 @@ class WebRTCCamera extends VideoRTC {
         if (template.indexOf('${') >= 0) {
             const render = () => {
                 try {
+                    // Exposed to Home Assistant templates evaluated on the next line.
+                    // eslint-disable-next-line no-unused-vars
                     const states = this.hass ? this.hass.states : undefined;
                     this.config[name] = JSON.parse(eval('`' + template + '`'));
                     renderHTML();

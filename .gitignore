@@ -3,6 +3,8 @@
 
 .idea/
 
-custom_components/webrtc/__pycache__/
+__pycache__/
 
 node_modules/
+/.venv
+package-lock.json

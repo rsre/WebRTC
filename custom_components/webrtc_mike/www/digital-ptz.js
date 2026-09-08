@@ -9,7 +9,7 @@ const DEFAULT_OPTIONS = {
   mouse_wheel_zoom: true,
   mouse_double_click_zoom: true,
   touch_pinch_zoom: true,
-  persist_key: "",
+  persist_key: '',
   persist: true,
 };
 export class DigitalPTZ {
@@ -23,9 +23,9 @@ export class DigitalPTZ {
     this.render = (transition = false) => {
       if (transition) {
         // transition is used to animate dbl click zoom
-        this.transformEl.style.transition = "transform 200ms";
+        this.transformEl.style.transition = 'transform 200ms';
         setTimeout(() => {
-          this.transformEl.style.transition = "";
+          this.transformEl.style.transition = '';
         }, 200);
       }
       this.transformEl.style.transform = this.transform.render();
@@ -51,16 +51,16 @@ export class DigitalPTZ {
     if (o.touch_tap_drag_zoom) h.push(startTouchTapDragZoom(gestureParam));
     if (o.touch_drag_pan) h.push(startTouchDragPan(gestureParam));
     if (o.touch_pinch_zoom) h.push(startTouchPinchZoom(gestureParam));
-    this.videoEl.addEventListener("loadedmetadata", this.recomputeRects);
-    this.videoEl.addEventListener("loadeddata", this.recomputeRects);
+    this.videoEl.addEventListener('loadedmetadata', this.recomputeRects);
+    this.videoEl.addEventListener('loadeddata', this.recomputeRects);
     this.resizeObserver = new ResizeObserver(this.recomputeRects);
     this.resizeObserver.observe(this.containerEl);
     this.recomputeRects();
   }
   destroy() {
     for (const off of this.offHandles) off();
-    this.videoEl.removeEventListener("loadedmetadata", this.recomputeRects);
-    this.videoEl.removeEventListener("loadeddata", this.recomputeRects);
+    this.videoEl.removeEventListener('loadedmetadata', this.recomputeRects);
+    this.videoEl.removeEventListener('loadeddata', this.recomputeRects);
     this.resizeObserver.unobserve(this.containerEl);
   }
 }
@@ -100,12 +100,12 @@ function startTouchPinchZoom({ containerEl, transform, render }) {
       preventScroll(moveEvent);
     };
     const onTouchEnd = () =>
-      containerEl.removeEventListener("touchmove", onTouchMove);
-    containerEl.addEventListener("touchmove", onTouchMove);
-    containerEl.addEventListener("touchend", onTouchEnd, { once: true });
+      containerEl.removeEventListener('touchmove', onTouchMove);
+    containerEl.addEventListener('touchmove', onTouchMove);
+    containerEl.addEventListener('touchend', onTouchEnd, { once: true });
   };
-  containerEl.addEventListener("touchstart", onTouchStart);
-  return () => containerEl.removeEventListener("touchstart", onTouchStart);
+  containerEl.addEventListener('touchstart', onTouchStart);
+  return () => containerEl.removeEventListener('touchstart', onTouchStart);
 }
 const getDist = (t1, t2) =>
   Math.hypot(
@@ -135,11 +135,11 @@ function startTouchTapDragZoom({ containerEl, transform, render }) {
       fastClicks = 0;
     }
   };
-  containerEl.addEventListener("touchmove", onTouchMove);
-  containerEl.addEventListener("touchstart", onTouchStart);
+  containerEl.addEventListener('touchmove', onTouchMove);
+  containerEl.addEventListener('touchstart', onTouchStart);
   return () => {
-    containerEl.removeEventListener("touchmove", onTouchMove);
-    containerEl.removeEventListener("touchstart", onTouchStart);
+    containerEl.removeEventListener('touchmove', onTouchMove);
+    containerEl.removeEventListener('touchstart', onTouchStart);
   };
 }
 function startMouseWheel({ containerEl, transform, render }) {
@@ -149,8 +149,8 @@ function startMouseWheel({ containerEl, transform, render }) {
     render();
     preventScroll(e);
   };
-  containerEl.addEventListener("wheel", onWheel);
-  return () => containerEl.removeEventListener("wheel", onWheel);
+  containerEl.addEventListener('wheel', onWheel);
+  return () => containerEl.removeEventListener('wheel', onWheel);
 }
 function startDoubleClickZoom({ containerEl, transform, render }) {
   let lastDown = 0;
@@ -172,16 +172,16 @@ function startDoubleClickZoom({ containerEl, transform, render }) {
       transform.zoomAtCoords(zoom, upEvent.pageX, upEvent.pageY);
       render(true);
     };
-    window.addEventListener("mouseup", onUp, { once: true });
+    window.addEventListener('mouseup', onUp, { once: true });
   };
-  containerEl.addEventListener("mousedown", onDown);
-  return () => containerEl.removeEventListener("mousedown", onDown);
+  containerEl.addEventListener('mousedown', onDown);
+  return () => containerEl.removeEventListener('mousedown', onDown);
 }
 function startGesturePan({ containerEl, transform, render }, type) {
   const [downName, moveName, upName] =
-    type === "mouse"
-      ? ["mousedown", "mousemove", "mouseup"]
-      : ["touchstart", "touchmove", "touchend"];
+    type === 'mouse'
+      ? ['mousedown', 'mousemove', 'mouseup']
+      : ['touchstart', 'touchmove', 'touchend'];
   const isTouchEvent = ev => 'TouchEvent' in window && ev instanceof TouchEvent;
   const onDown = (downEvt) => {
     let last = isTouchEvent(downEvt) ? downEvt.touches[0] : downEvt;
@@ -201,21 +201,21 @@ function startGesturePan({ containerEl, transform, render }, type) {
   return () => containerEl.removeEventListener(downName, onDown);
 }
 function startTouchDragPan(params) {
-  return startGesturePan(params, "touch");
+  return startGesturePan(params, 'touch');
 }
 function startMouseDragPan(params) {
-  return startGesturePan(params, "mouse");
+  return startGesturePan(params, 'mouse');
 }
 /** Transform */
-const PERSIST_KEY_PREFIX = "webrtc-mike-digital-ptc:";
+const PERSIST_KEY_PREFIX = 'webrtc-mike-digital-ptc:';
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 function getTransformedDimensions(video) {
   const { videoWidth, videoHeight } = video;
   if (!videoHeight || !videoWidth) return undefined;
-  var transform = window.getComputedStyle(video).getPropertyValue("transform");
+  const transform = window.getComputedStyle(video).getPropertyValue('transform');
   const match = transform.match(/matrix\((.+)\)/);
   if (!match || !match[1]) return { videoWidth, videoHeight }; // the video isn't transformed
-  const matrix = new DOMMatrix(match[1].split(", ").map(Number));
+  const matrix = new DOMMatrix(match[1].split(', ').map(Number));
   const points = [
     new DOMPoint(0, 0),
     new DOMPoint(videoWidth, 0),
@@ -242,7 +242,7 @@ class Transform {
           Number.isFinite
         );
         if (!isValid) {
-          throw new Error("Broken local storage");
+          throw new Error('Broken local storage');
         }
         this.x = loaded.x;
         this.y = loaded.y;
@@ -339,7 +339,7 @@ class Transform {
     this.zoomAtCoords(zoom, x, y);
   }
   render() {
-    if (!this.videoRect) return "";
+    if (!this.videoRect) return '';
     const { x, y, scale } = this;
     return `translate(${x * this.videoRect.width}px, ${
       y * this.videoRect.height

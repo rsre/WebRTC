@@ -1,8 +1,8 @@
 from homeassistant.const import REQUIRED_PYTHON_VER
 
-from custom_components.webrtc import *
-from custom_components.webrtc.config_flow import *
-from custom_components.webrtc.media_player import *
+from custom_components.webrtc_mike import *
+from custom_components.webrtc_mike.config_flow import *
+from custom_components.webrtc_mike.media_player import *
 
 
 def test_backward():
