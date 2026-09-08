@@ -37,6 +37,7 @@ class WebRTCCamera extends VideoRTC {
          *     intersection: number,
          *     ui: boolean,
          *     ptt: boolean,
+         *     debug: boolean,
          *     style: string,
          *     background: boolean,
          *
@@ -103,11 +104,19 @@ class WebRTCCamera extends VideoRTC {
     }
 
     setStatus(mode, status) {
+        this.debugLog('status', {mode: mode, status: status || ''});
         const divMode = this.querySelector('.mode').innerText;
         if (mode === 'error' && divMode !== 'Loading..' && divMode !== 'Loading...') return;
 
         this.querySelector('.mode').innerText = mode;
         this.querySelector('.status').innerText = status || '';
+    }
+
+    debugLog(message, detail) {
+        if (!this.config || !this.config.debug) return;
+        if (!this.debugStart) this.debugStart = performance.now();
+        const elapsed = Math.round(performance.now() - this.debugStart);
+        console.info(`[WebRTC Mike +${elapsed}ms] ${message}`, detail === undefined ? '' : detail);
     }
 
     /** @param reload {boolean} */
@@ -132,7 +141,17 @@ class WebRTCCamera extends VideoRTC {
     }
 
     oninit() {
+        this.debugStart = performance.now();
+        this.debugLog('initializing card', {mode: this.mode, media: this.media, ptt: this.config.ptt});
         super.oninit();
+        for (const event of ['loadedmetadata', 'loadeddata', 'canplay', 'playing', 'waiting', 'stalled']) {
+            this.video.addEventListener(event, () => this.debugLog(`video ${event}`, {
+                readyState: this.video.readyState,
+                networkState: this.video.networkState,
+                paused: this.video.paused,
+                muted: this.video.muted,
+            }));
+        }
         this.renderMain();
         this.renderPTT();
         this.renderDigitalPTZ();
@@ -143,17 +162,32 @@ class WebRTCCamera extends VideoRTC {
     }
 
     onconnect() {
-        if (!this.config || !this.hass) return false;
-        if (!this.isConnected || this.ws || this.pc) return false;
+        if (!this.config || !this.hass) {
+            this.debugLog('connect skipped: configuration or Home Assistant unavailable');
+            return false;
+        }
+        if (!this.isConnected || this.ws || this.pc) {
+            this.debugLog('connect skipped', {
+                isConnected: this.isConnected,
+                hasWebSocket: Boolean(this.ws),
+                hasPeerConnection: Boolean(this.pc),
+            });
+            return false;
+        }
 
         const divMode = this.querySelector('.mode').innerText;
-        if (divMode === 'Loading..') return;
+        if (divMode === 'Loading..') {
+            this.debugLog('connect skipped: signing already in progress');
+            return false;
+        }
 
         this.setStatus('Loading..');
+        this.debugLog('requesting signed WebSocket path');
 
         this.hass.callWS({
             type: 'auth/sign_path', path: '/api/webrtc_mike/ws'
         }).then(data => {
+            this.debugLog('received signed WebSocket path');
             if (this.config.poster && !this.config.poster_remote) {
                 this.video.poster = this.hass.hassUrl(data.path) + '&poster=' + encodeURIComponent(this.config.poster);
             }
@@ -174,21 +208,26 @@ class WebRTCCamera extends VideoRTC {
             }
 
             if (super.onconnect()) {
+                this.debugLog('opening WebSocket');
                 this.setStatus('Loading...');
             } else {
+                this.debugLog('WebSocket open was rejected by player state');
                 this.setStatus('error', 'unable to connect');
             }
         }).catch(er => {
+            this.debugLog('signing failed', {name: er.name, message: er.message || String(er)});
             this.setStatus('error', er);
         });
     }
 
     onopen() {
         const result = super.onopen();
+        this.debugLog('WebSocket opened; requested modes', result);
 
         this.onmessage['stream'] = msg => {
             switch (msg.type) {
                 case 'error':
+                    this.debugLog('server error', msg.value);
                     this.setStatus('error', msg.value);
                     break;
                 case 'mse':
@@ -203,7 +242,19 @@ class WebRTCCamera extends VideoRTC {
         return result;
     }
 
+    onclose() {
+        this.debugLog('WebSocket closed', {wsState: this.wsState, pcState: this.pcState});
+        const reconnecting = super.onclose();
+        this.debugLog(reconnecting ? 'WebSocket reconnect scheduled' : 'WebSocket close was intentional');
+        return reconnecting;
+    }
+
     onpcvideo(ev) {
+        const stream = ev.srcObject;
+        this.debugLog('received WebRTC media', {
+            videoTracks: stream ? stream.getVideoTracks().length : 0,
+            audioTracks: stream ? stream.getAudioTracks().length : 0,
+        });
         super.onpcvideo(ev);
 
         if (this.pcState !== WebSocket.CLOSED) {
@@ -228,11 +279,16 @@ class WebRTCCamera extends VideoRTC {
         this.pttSilentGain.connect(this.pttSilentDestination);
         this.pttSilentSource.start();
         this.pttSilentTrack = this.pttSilentDestination.stream.getAudioTracks()[0];
+        this.debugLog('created silent PTT track', {
+            audioContextState: this.pttAudioContext.state,
+            trackState: this.pttSilentTrack.readyState,
+        });
         return this.pttSilentTrack;
     }
 
     /** Release resources used by the silent PTT placeholder track. */
     closePTTSilentTrack() {
+        this.debugLog('closing silent PTT track');
         if (this.pttSilentTrack) this.pttSilentTrack.stop();
         if (this.pttSilentSource) {
             try {
@@ -260,19 +316,31 @@ class WebRTCCamera extends VideoRTC {
             return super.createOffer(pc);
         }
 
+        this.debugLog('creating PTT WebRTC offer');
+        for (const event of ['connectionstatechange', 'iceconnectionstatechange', 'signalingstatechange']) {
+            pc.addEventListener(event, () => this.debugLog(`peer ${event}`, {
+                connectionState: pc.connectionState,
+                iceConnectionState: pc.iceConnectionState,
+                signalingState: pc.signalingState,
+            }));
+        }
         const media = this.media;
         const silentTrack = this.createPTTSilentTrack();
         this.pttSender = pc.addTransceiver(silentTrack, {direction: 'sendonly'}).sender;
+        this.debugLog('added silent send-only transceiver');
 
         try {
             this.media = media.split(',').filter(kind => kind !== 'microphone').join(',');
-            return await super.createOffer(pc);
+            const offer = await super.createOffer(pc);
+            this.debugLog('local WebRTC offer created');
+            return offer;
         } finally {
             this.media = media;
         }
     }
 
     ondisconnect() {
+        this.debugLog('disconnecting card');
         if (this.pttTrack) this.pttTrack.stop();
         this.pttTrack = null;
         this.pttSender = null;
@@ -402,13 +470,17 @@ class WebRTCCamera extends VideoRTC {
         };
 
         const stop = () => {
+            if (this.pttPressed || this.pttTrack) this.debugLog('PTT released');
             this.pttPressed = false;
             const track = this.pttTrack;
             this.pttTrack = null;
             if (track) {
                 const replace = this.pttSender && this.pttSilentTrack ?
                     this.pttSender.replaceTrack(this.pttSilentTrack) : Promise.resolve();
-                replace.then(() => track.stop(), error => {
+                replace.then(() => {
+                    track.stop();
+                    this.debugLog('restored silent PTT track');
+                }, error => {
                     console.warn(error);
                     track.stop();
                 });
@@ -428,6 +500,7 @@ class WebRTCCamera extends VideoRTC {
             if (this.pttPressed) return;
 
             this.pttPressed = true;
+            this.debugLog('PTT pressed; requesting microphone');
             this.pttVideoMuted = this.video.muted;
             this.video.muted = true;
             button.classList.add('active');
@@ -443,6 +516,7 @@ class WebRTCCamera extends VideoRTC {
                 const track = stream.getAudioTracks()[0];
                 stream.getTracks().filter(value => value !== track).forEach(value => value.stop());
                 if (!track) throw new Error('No microphone track available');
+                this.debugLog('microphone acquired', {trackState: track.readyState});
 
                 if (!this.pttSender) {
                     this.pttPressed = false;
@@ -461,7 +535,9 @@ class WebRTCCamera extends VideoRTC {
 
                 this.pttTrack = track;
                 await this.pttSender.replaceTrack(track);
+                this.debugLog('microphone attached to PTT sender');
             } catch (error) {
+                this.debugLog('PTT failed', {name: error.name, message: error.message || String(error)});
                 this.pttPressed = false;
                 if (this.pttTrack) this.pttTrack.stop();
                 this.pttTrack = null;
